@@ -32,16 +32,7 @@ pipeline {
         }
 
         // Analyze code using SonarQube.
-        stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('SonarQube') {
-            sh '''
-                mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar \
-                  -Dsonar.projectKey=springboot-jenkins-cicd
-            '''
-        }
-    }
-}
+        
     }
 
     // Display the pipeline outcome.
@@ -50,7 +41,19 @@ pipeline {
             echo 'Build completed successfully!'
         }
 
-        failure {
+ stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('SonarQube') {
+            sh '''
+                mvn -B \
+                  org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar \
+                  -Dsonar.projectKey=springboot-jenkins-cicd
+            '''
+        }
+    }
+}       
+
+failure {
             echo 'Build failed. Check the Jenkins console output.'
         }
     }

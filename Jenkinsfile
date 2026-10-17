@@ -1,4 +1,3 @@
-```groovy
 pipeline {
 
     // Use a Docker container as the build environment.
@@ -44,4 +43,4 @@ pipeline {
         }
     }
 }
-```
+

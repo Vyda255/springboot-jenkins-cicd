@@ -1,61 +1,65 @@
 pipeline {
-
-    // Use a Docker container as the build environment.
     agent {
         docker {
             image 'maven:3.9.9-eclipse-temurin-17'
+            args '-v /tmp:/tmp'
         }
+    }
+
+    environment {
+        SONAR_PROJECT_KEY = 'springboot-jenkins-cicd'
     }
 
     stages {
 
-        // Confirm Java and Maven are available.
+        stage('Checkout') {
+            steps {
+                echo 'Checking out source code from GitHub...'
+                checkout scm
+            }
+        }
+
         stage('Check Environment') {
             steps {
+                echo 'Checking Java and Maven versions...'
                 sh 'java -version'
                 sh 'mvn -version'
             }
         }
 
-        // Retrieve the configured source revision.
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        // Compile, test, package, and verify the application.
         stage('Build and Test') {
             steps {
-                sh 'mvn clean verify'
+                echo 'Building Spring Boot application...'
+                sh 'mvn -B clean verify'
             }
         }
 
-        // Analyze code using SonarQube.
-        
+        stage('SonarQube Analysis') {
+            steps {
+                echo 'Running SonarQube analysis...'
+
+                withSonarQubeEnv('SonarQube') {
+                    sh '''
+                        mvn -B \
+                          org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY}
+                    '''
+                }
+            }
+        }
     }
 
-    // Display the pipeline outcome.
     post {
         success {
-            echo 'Build completed successfully!'
+            echo 'SUCCESS: Build, tests, and SonarQube analysis completed!'
         }
 
- stage('SonarQube Analysis') {
-    steps {
-        withSonarQubeEnv('SonarQube') {
-            sh '''
-                mvn -B \
-                  org.sonarsource.scanner.maven:sonar-maven-plugin:3.11.0.3922:sonar \
-                  -Dsonar.projectKey=springboot-jenkins-cicd
-            '''
+        failure {
+            echo 'FAILED: Check the Jenkins Console Output to identify the error.'
         }
-    }
-}       
 
-failure {
-            echo 'Build failed. Check the Jenkins console output.'
+        always {
+            echo 'Pipeline execution finished.'
         }
     }
 }
-

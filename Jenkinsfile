@@ -31,6 +31,19 @@ pipeline {
             }
         }
     }
+    
+    stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('SonarQube') {
+            sh '''
+                mvn sonar:sonar \
+                  -Dsonar.projectKey=springboot-jenkins-cicd
+            '''
+        }
+    }
+}
+
+
 
     // Display the pipeline outcome.
     post {

@@ -1,11 +1,6 @@
 pipeline {
-    agent {
-        docker {
-            // Your main build and test agent stays on Java 17
-            image 'maven:3.9.6-eclipse-temurin-17'
-            args '-v maven-repo:/root/.m2'
-        }
-    }
+    // Allows each stage to specify its own container agent
+    agent any
     
     stages {
         stage('Checkout Code') {
@@ -15,6 +10,13 @@ pipeline {
         }
         
         stage('Build & Test') {
+            agent {
+                docker {
+                    // Runs the build and tests using Java 17
+                    image 'maven:3.9.6-eclipse-temurin-17'
+                    args '-v maven-repo:/root/.m2'
+                }
+            }
             steps {
                 echo 'Running Maven build and tests on Java 17...'
                 sh 'mvn clean package'
@@ -22,16 +24,17 @@ pipeline {
         }
         
         stage('SonarQube Analysis') {
+            agent {
+                docker {
+                    // Automatically spins up a fresh Java 21 container just for SonarQube
+                    image 'maven:3.9.6-eclipse-temurin-21'
+                    args '-v maven-repo:/root/.m2'
+                }
+            }
             steps {
                 echo 'Running SonarQube analysis using Java 21...'
                 withSonarQubeEnv('SonarQube') {
-                    // Uses docker run inside the pipeline to execute the scan with a Java 21 Maven container on the fly
-                    sh '''
-                        docker run --rm -v $(pwd):/usr/src/myapp -v maven-repo:/root/.m2 -w /usr/src/myapp maven:3.9.6-eclipse-temurin-21 \
-                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                        -Dsonar.projectKey=springboot-jenkins-cicd \
-                        -Dsonar.projectName="springboot-jenkins-cicd"
-                    '''
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
                 }
             }
         }

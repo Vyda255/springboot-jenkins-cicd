@@ -1,9 +1,7 @@
 pipeline {
     agent {
         docker {
-            // Single Java 21 agent for everything: builds your app AND runs Sonar smoothly
             image 'maven:3.9.6-eclipse-temurin-21'
-            args '-v maven-repo:/root/.m2'
         }
     }
     
@@ -17,7 +15,8 @@ pipeline {
         stage('Build & Test') {
             steps {
                 echo 'Running Maven build and tests...'
-                sh 'mvn clean package'
+                // Uses an absolute path in /tmp which is 100% writable by any container user
+                sh 'mvn clean package -Dmaven.repo.local=/tmp/m2'
             }
         }
         
@@ -25,7 +24,7 @@ pipeline {
             steps {
                 echo 'Running SonarQube analysis...'
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=/tmp/m2'
                 }
             }
         }

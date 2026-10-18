@@ -1,5 +1,5 @@
 pipeline {
-    agent none // Removed global docker agent to prevent Quality Gate isolation bugs
+    agent none 
     
     stages {
         stage('Checkout Code') {
@@ -21,7 +21,11 @@ pipeline {
         
         stage('SonarQube Analysis') {
             agent {
-                docker { image 'maven:3.9.6-eclipse-temurin-21' }
+                docker { 
+                    image 'maven:3.9.6-eclipse-temurin-21'
+                    // CRITICAL FIX: Links the container network to your host network
+                    args '--net=host' 
+                }
             }
             steps {
                 echo 'Running SonarQube analysis...'
@@ -32,7 +36,7 @@ pipeline {
         }
         
         stage('Quality Gate') {
-            agent any // Run on the host so Jenkins can natively catch the SonarQube webhook
+            agent any 
             steps {
                 echo 'Checking SonarQube Quality Gate status...'
                 timeout(time: 10, unit: 'MINUTES') {

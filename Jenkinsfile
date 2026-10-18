@@ -1,26 +1,28 @@
 pipeline {
-    agent {
-        docker {
-            image 'maven:3.9.6-eclipse-temurin-21'
-        }
-    }
+    agent none // Removed global docker agent to prevent Quality Gate isolation bugs
     
     stages {
         stage('Checkout Code') {
+            agent any
             steps {
                 checkout scm
             }
         }
         
         stage('Build & Test') {
+            agent {
+                docker { image 'maven:3.9.6-eclipse-temurin-21' }
+            }
             steps {
                 echo 'Running Maven build and tests...'
-                // Uses an absolute path in /tmp which is 100% writable by any container user
                 sh 'mvn clean package -Dmaven.repo.local=/tmp/m2'
             }
         }
         
         stage('SonarQube Analysis') {
+            agent {
+                docker { image 'maven:3.9.6-eclipse-temurin-21' }
+            }
             steps {
                 echo 'Running SonarQube analysis...'
                 withSonarQubeEnv('SonarQube') {
@@ -30,7 +32,9 @@ pipeline {
         }
         
         stage('Quality Gate') {
+            agent any // Run on the host so Jenkins can natively catch the SonarQube webhook
             steps {
+                echo 'Checking SonarQube Quality Gate status...'
                 timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -38,6 +42,7 @@ pipeline {
         }
         
         stage('Archive Artifacts') {
+            agent any
             steps {
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }

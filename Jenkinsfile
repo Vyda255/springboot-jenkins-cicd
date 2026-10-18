@@ -1,5 +1,11 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            // Single Java 21 agent for everything: builds your app AND runs Sonar smoothly
+            image 'maven:3.9.6-eclipse-temurin-21'
+            args '-v maven-repo:/root/.m2'
+        }
+    }
     
     stages {
         stage('Checkout Code') {
@@ -9,29 +15,17 @@ pipeline {
         }
         
         stage('Build & Test') {
-            agent {
-                docker {
-                    image 'maven:3.9.6-eclipse-temurin-17'
-                    // No complex volume args needed; workspace is natively writable
-                }
-            }
             steps {
-                echo 'Running Maven build and tests on Java 17...'
-                sh 'mvn clean package -Dmaven.repo.local=${WORKSPACE}/.m2'
+                echo 'Running Maven build and tests...'
+                sh 'mvn clean package'
             }
         }
         
         stage('SonarQube Analysis') {
-            agent {
-                docker {
-                    image 'maven:3.9.6-eclipse-temurin-21'
-                }
-            }
             steps {
-                echo 'Running SonarQube analysis using Java 21...'
+                echo 'Running SonarQube analysis...'
                 withSonarQubeEnv('SonarQube') {
-                    // Reuses the dependencies downloaded in the previous stage from ${WORKSPACE}/.m2
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=${WORKSPACE}/.m2'
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
                 }
             }
         }

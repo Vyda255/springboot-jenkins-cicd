@@ -1,6 +1,7 @@
 pipeline {
     agent {
         docker {
+            // Your main build and test agent stays on Java 17
             image 'maven:3.9.6-eclipse-temurin-17'
             args '-v maven-repo:/root/.m2'
         }
@@ -9,24 +10,28 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                // Pulls code from the GitHub branch that triggered the build
                 checkout scm
             }
         }
         
         stage('Build & Test') {
             steps {
-                echo 'Running Maven build and tests inside Docker agent...'
+                echo 'Running Maven build and tests on Java 17...'
                 sh 'mvn clean package'
             }
         }
         
         stage('SonarQube Analysis') {
             steps {
-                echo 'Running SonarQube analysis...'
+                echo 'Running SonarQube analysis using Java 21...'
                 withSonarQubeEnv('SonarQube') {
-                    // Uses your GitHub repo name as the SonarQube project key and name
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
+                    // Uses docker run inside the pipeline to execute the scan with a Java 21 Maven container on the fly
+                    sh '''
+                        docker run --rm -v $(pwd):/usr/src/myapp -v maven-repo:/root/.m2 -w /usr/src/myapp maven:3.9.6-eclipse-temurin-21 \
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                        -Dsonar.projectKey=springboot-jenkins-cicd \
+                        -Dsonar.projectName="springboot-jenkins-cicd"
+                    '''
                 }
             }
         }
@@ -34,7 +39,6 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    // Pauses the pipeline until SonarQube processes the report and returns a pass/fail
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -42,16 +46,12 @@ pipeline {
         
         stage('Archive Artifacts') {
             steps {
-                // Save the built JAR file so you can download it from Jenkins
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
     }
     
     post {
-        always {
-            echo 'Pipeline execution finished.'
-        }
         success {
             echo 'Pipeline and SonarQube Quality Gate passed successfully!'
         }

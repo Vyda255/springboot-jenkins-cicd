@@ -6,7 +6,6 @@ args '-v /tmp:/tmp'
 }
 }
 
-```
 environment {
     SONAR_PROJECT_KEY = 'springboot-jenkins-cicd'
 }

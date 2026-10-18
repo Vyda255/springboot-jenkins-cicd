@@ -1,5 +1,4 @@
 pipeline {
-    // Allows each stage to specify its own container agent
     agent any
     
     stages {
@@ -12,29 +11,28 @@ pipeline {
         stage('Build & Test') {
             agent {
                 docker {
-                    // Runs the build and tests using Java 17
                     image 'maven:3.9.6-eclipse-temurin-17'
-                    args '-v maven-repo:/root/.m2'
+                    args '-v maven-repo:/tmp/m2'
                 }
             }
             steps {
                 echo 'Running Maven build and tests on Java 17...'
-                sh 'mvn clean package'
+                sh 'mvn clean package -Dmaven.repo.local=/tmp/m2'
             }
         }
         
         stage('SonarQube Analysis') {
             agent {
                 docker {
-                    // Automatically spins up a fresh Java 21 container just for SonarQube
                     image 'maven:3.9.6-eclipse-temurin-21'
-                    args '-v maven-repo:/root/.m2'
+                    args '-v maven-repo:/tmp/m2'
                 }
             }
             steps {
                 echo 'Running SonarQube analysis using Java 21...'
+                // Updated to match your exact SonarQube server name: 'SonarQube'
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=/tmp/m2'
                 }
             }
         }

@@ -26,7 +26,7 @@ pipeline {
                 echo 'Running SonarQube analysis...'
                 withSonarQubeEnv('SonarQube') {
                     // Uses your GitHub repo name as the SonarQube project key and name
-                    sh 'mvn sonar:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
                 }
             }
         }

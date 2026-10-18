@@ -12,12 +12,12 @@ pipeline {
             agent {
                 docker {
                     image 'maven:3.9.6-eclipse-temurin-17'
-                    args '-v maven-repo:/tmp/m2'
+                    // No complex volume args needed; workspace is natively writable
                 }
             }
             steps {
                 echo 'Running Maven build and tests on Java 17...'
-                sh 'mvn clean package -Dmaven.repo.local=/tmp/m2'
+                sh 'mvn clean package -Dmaven.repo.local=${WORKSPACE}/.m2'
             }
         }
         
@@ -25,14 +25,13 @@ pipeline {
             agent {
                 docker {
                     image 'maven:3.9.6-eclipse-temurin-21'
-                    args '-v maven-repo:/tmp/m2'
                 }
             }
             steps {
                 echo 'Running SonarQube analysis using Java 21...'
-                // Updated to match your exact SonarQube server name: 'SonarQube'
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=/tmp/m2'
+                    // Reuses the dependencies downloaded in the previous stage from ${WORKSPACE}/.m2
+                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=${WORKSPACE}/.m2'
                 }
             }
         }

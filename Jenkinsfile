@@ -24,7 +24,7 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 echo 'Running SonarQube analysis...'
-                withSonarQubeEnv('SonarQubeServer') {
+                withSonarQubeEnv('SonarQube') {
                     // Uses your GitHub repo name as the SonarQube project key and name
                     sh 'mvn sonar:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd"'
                 }

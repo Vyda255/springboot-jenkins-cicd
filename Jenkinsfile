@@ -1,6 +1,13 @@
 pipeline {
     agent none 
     
+    // Global environment variables for AWS ECR authentication
+    environment {
+        AWS_ACCOUNT_ID = '916338043124' 
+        AWS_REGION     = 'us-east-1'         
+        ECR_REPO_NAME  = 'springboot-app'          
+    }
+    
     stages {
         stage('Checkout Code') {
             agent any
@@ -53,11 +60,37 @@ pipeline {
                 archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
             }
         }
+
+        stage('Build & Push to ECR') {
+            // Uses the host agent directly to execute native Docker daemon commands 
+            agent any 
+            steps {
+                echo 'Building and pushing Docker image to AWS ECR...'
+                // Injecting AWS access keys stored inside the Jenkins credentials manager
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                        # 1. Log into your private AWS ECR container registry backend
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        
+                        # 2. Package and build the Docker image using your root Dockerfile
+                        docker build -t ${ECR_REPO_NAME}:${BUILD_NUMBER} .
+                        
+                        # 3. Add AWS formatting tags to the constructed image layer
+                        docker tag ${ECR_REPO_NAME}:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:${BUILD_NUMBER}
+                        docker tag ${ECR_REPO_NAME}:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:latest
+                        
+                        # 4. Push both individual build logs and 'latest' tags directly into the repository registry
+                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:${BUILD_NUMBER}
+                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:latest
+                    '''
+                }
+            }
+        }
     }
     
     post {
         success {
-            echo 'Pipeline and SonarQube Quality Gate passed successfully!'
+            echo 'Pipeline, SonarQube Quality Gate, and ECR Push passed successfully!'
         }
         failure {
             echo 'Pipeline or Quality Gate failed.'

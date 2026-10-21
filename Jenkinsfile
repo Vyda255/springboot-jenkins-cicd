@@ -4,8 +4,8 @@ pipeline {
     // Global environment variables for AWS ECR authentication
     environment {
         AWS_ACCOUNT_ID = '916338043124' 
-        AWS_REGION     = 'us-east-1'         
-        ECR_REPO_NAME  = 'springboot-app'          
+        AWS_REGION     = 'us-east-1'     
+        ECR_REPO_NAME  = 'springboot-app'
     }
     
     stages {
@@ -38,7 +38,6 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=/tmp/m2 -Dsonar.userHome=/tmp'
                 }
-                // FIX: Give Jenkins 15 seconds to safely register the Sonar background task ID metadata
                 sleep time: 15, unit: 'SECONDS'
             }
         }
@@ -48,7 +47,6 @@ pipeline {
             steps {
                 echo 'Checking SonarQube Quality Gate status...'
                 timeout(time: 10, unit: 'MINUTES') {
-                    // This will now catch the webhook or fetch the completed status instantly
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -62,11 +60,9 @@ pipeline {
         }
 
         stage('Build & Push to ECR') {
-            // Uses the host agent directly to execute native Docker daemon commands 
             agent any 
             steps {
                 echo 'Building and pushing Docker image to AWS ECR...'
-                // Injecting AWS access keys stored inside the Jenkins credentials manager
                 withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
                         # 1. Log into your private AWS ECR container registry backend
@@ -75,7 +71,7 @@ pipeline {
                         # 2. Package and build the Docker image using your root Dockerfile
                         docker build -t ${ECR_REPO_NAME}:${BUILD_NUMBER} .
                         
-                        # 3. Add AWS formatting tags to the constructed image layer
+                        # 3. FIX: Properly formatted AWS ECR tags with dynamic variables
                         docker tag ${ECR_REPO_NAME}:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:${BUILD_NUMBER}
                         docker tag ${ECR_REPO_NAME}:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:latest
                         

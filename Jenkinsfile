@@ -1,57 +1,68 @@
 pipeline {
-    agent none 
-    
-    // Global environment variables for AWS ECR authentication
+    agent none
+
     environment {
-        AWS_ACCOUNT_ID = '916338043124' 
-        AWS_REGION     = 'us-east-1'     
+        AWS_ACCOUNT_ID = '916338043124'
+        AWS_REGION     = 'us-east-1'
         ECR_REPO_NAME  = 'springboot-app'
     }
-    
+
     stages {
+
         stage('Checkout Code') {
             agent any
             steps {
                 checkout scm
             }
         }
-        
+
         stage('Build & Test') {
             agent {
-                docker { image 'maven:3.9.6-eclipse-temurin-21' }
+                docker {
+                    image 'maven:3.9.6-eclipse-temurin-21'
+                }
             }
             steps {
                 echo 'Running Maven build and tests...'
                 sh 'mvn clean package -Dmaven.repo.local=/tmp/m2'
             }
         }
-        
+
         stage('SonarQube Analysis') {
             agent {
-                docker { 
+                docker {
                     image 'maven:3.9.6-eclipse-temurin-21'
-                    args '--net=host' 
+                    args '--net=host'
                 }
             }
             steps {
                 echo 'Running SonarQube analysis...'
+
                 withSonarQubeEnv('SonarQube') {
-                    sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=springboot-jenkins-cicd -Dsonar.projectName="springboot-jenkins-cicd" -Dmaven.repo.local=/tmp/m2 -Dsonar.userHome=/tmp'
+                    sh '''
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                        -Dsonar.projectKey=springboot-jenkins-cicd \
+                        -Dsonar.projectName=springboot-jenkins-cicd \
+                        -Dmaven.repo.local=/tmp/m2 \
+                        -Dsonar.userHome=/tmp
+                    '''
                 }
+
                 sleep time: 15, unit: 'SECONDS'
             }
         }
-        
+
         stage('Quality Gate') {
-            agent any 
+            agent any
             steps {
                 echo 'Checking SonarQube Quality Gate status...'
+
                 timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
-        
+
         stage('Archive Artifacts') {
             agent any
             steps {
@@ -60,36 +71,67 @@ pipeline {
         }
 
         stage('Build & Push to ECR') {
-            agent any 
+            agent any
             steps {
                 echo 'Building and pushing Docker image to AWS ECR...'
-                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
                     sh '''
-                        # 1. Log into your private AWS ECR container registry backend
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                        
-                        # 2. Package and build the Docker image using your root Dockerfile
-                        docker build -t ${ECR_REPO_NAME}:${BUILD_NUMBER} .
-                        
-                        # 3. FIX: Properly formatted AWS ECR tags with dynamic variables
-                        docker tag ${ECR_REPO_NAME}:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:${BUILD_NUMBER}
-                        docker tag ${ECR_REPO_NAME}:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:latest
-                        
-                        # 4. Push both individual build logs and 'latest' tags directly into the repository registry
-                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:${BUILD_NUMBER}
-                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}://{ECR_REPO_NAME}:latest
+                        set -e
+
+                        # Configure AWS region
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+
+                        # Define the correct ECR registry and image names
+                        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                        ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPO_NAME}"
+
+                        # 1. Log in to Amazon ECR
+                        aws ecr get-login-password --region "${AWS_REGION}" | \
+                        docker login \
+                            --username AWS \
+                            --password-stdin "${ECR_REGISTRY}"
+
+                        # 2. Build the Docker image
+                        docker build -t "${ECR_REPO_NAME}:${BUILD_NUMBER}" .
+
+                        # 3. Tag the image with its build number
+                        docker tag \
+                            "${ECR_REPO_NAME}:${BUILD_NUMBER}" \
+                            "${ECR_IMAGE}:${BUILD_NUMBER}"
+
+                        # 4. Tag the image as latest
+                        docker tag \
+                            "${ECR_REPO_NAME}:${BUILD_NUMBER}" \
+                            "${ECR_IMAGE}:latest"
+
+                        # 5. Push the build-number image to ECR
+                        docker push "${ECR_IMAGE}:${BUILD_NUMBER}"
+
+                        # 6. Push the latest image to ECR
+                        docker push "${ECR_IMAGE}:latest"
+
+                        echo "Docker images pushed successfully to ${ECR_IMAGE}"
                     '''
                 }
             }
         }
     }
-    
+
     post {
         success {
             echo 'Pipeline, SonarQube Quality Gate, and ECR Push passed successfully!'
         }
+
         failure {
-            echo 'Pipeline or Quality Gate failed.'
+            echo 'Pipeline or Quality Gate failed. Check the console output for details.'
         }
     }
 }
+

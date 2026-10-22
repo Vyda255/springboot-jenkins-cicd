@@ -13,9 +13,7 @@ pipeline {
         stage('Build & Test') {
             agent {
                 docker {
-                    image 'maven:3.9.6-eclipse-temurin-17'// Grants root write permissions for automated webhook runners
-                    args '-u root'
-
+                    image 'maven:3.9.6-eclipse-temurin-17'
                 }
             }
             steps {

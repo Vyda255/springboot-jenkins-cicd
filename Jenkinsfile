@@ -1,12 +1,6 @@
 pipeline {
     agent none
 
-    environment {
-        AWS_ACCOUNT_ID = '916338043124'
-        AWS_REGION     = 'us-east-1'
-        ECR_REPO_NAME  = 'springboot-app'
-    }
-
     stages {
 
         stage('Checkout Code') {
@@ -19,7 +13,7 @@ pipeline {
         stage('Build & Test') {
             agent {
                 docker {
-                    image 'maven:3.9.6-eclipse-temurin-21'
+                    image 'maven:3.9.6-eclipse-temurin-17'
                 }
             }
             steps {
@@ -85,10 +79,10 @@ pipeline {
                     sh '''
                         set -e
 
-                        # Configure AWS region
+                        # Configure AWS region dynamically from Jenkins global env
                         export AWS_DEFAULT_REGION="${AWS_REGION}"
 
-                        # Define the correct ECR registry and image names
+                        # Define the ECR registry and image names using injected variables
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                         ECR_IMAGE="${ECR_REGISTRY}/${ECR_REPO_NAME}"
 
@@ -122,6 +116,34 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to AWS ECS (Fargate)') {
+            agent any
+            steps {
+                echo 'Notifying ECS Fargate Cluster to roll out the latest ECR image...'
+                
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-credentials',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    sh '''
+                        set -e
+                        export AWS_DEFAULT_REGION="${AWS_REGION}"
+
+                        # Triggers the Fargate service to perform a rolling replacement deployment
+                        aws ecs update-service \
+                            --cluster "springboot-cluster" \
+                            --service "springboot-service" \
+                            --force-new-deployment
+                        
+                        echo "Fargate rolling deployment triggered successfully!"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -134,4 +156,3 @@ pipeline {
         }
     }
 }
-

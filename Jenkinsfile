@@ -1,10 +1,6 @@
 pipeline {
     agent none
 
-    // Your AWS environment variables remain hidden securely.
-    // Jenkins pulls AWS_ACCOUNT_ID, AWS_REGION, and ECR_REPO_NAME 
-    // directly from your Jenkins Global Environment Variables.
-
     stages {
 
         stage('Checkout Code') {
@@ -17,11 +13,7 @@ pipeline {
         stage('Build & Test') {
             agent {
                 docker {
-                    // Configured to use Java 17 to match your production Dockerfile configuration
                     image 'maven:3.9.6-eclipse-temurin-17'
-                    // CRUCIAL WEBHOOK FIX: Grants root write permissions inside the container 
-                    // to prevent permission crashes triggered by changing the Jenkins URL context
-                    args '-u root'
                 }
             }
             steps {
@@ -33,7 +25,6 @@ pipeline {
         stage('SonarQube Analysis') {
             agent {
                 docker {
-                    // Retained Java 21 execution context for the Sonar scanner tool compatibility
                     image 'maven:3.9.6-eclipse-temurin-21'
                     args '--net=host'
                 }
